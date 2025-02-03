@@ -1,10 +1,8 @@
 <?php
-ob_start(); // شروع بافر خروجی
 
-// شروع session
 session_start();
 
-// فعال سازی نمایش خطاها
+// فعال‌سازی نمایش خطاها
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -18,7 +16,13 @@ try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {
-    die("Connection failed: " . $e->getMessage());
+    die("خطا در اتصال به پایگاه داده: " . $e->getMessage());
+}
+
+// اگر قبلاً وارد شده، به پنل هدایت شود
+if (isset($_SESSION['user_id'])) {
+    header("Location: panel.php");
+    exit();
 }
 
 $login_error = '';
@@ -26,30 +30,26 @@ $register_errors = [];
 
 // پردازش فرم ورود
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
-    $username = $_POST['username'] ?? '';
-    $password = $_POST['password'] ?? '';
+    $username = trim($_POST['username'] ?? '');
+    $password = trim($_POST['password'] ?? '');
 
     if (empty($username) || empty($password)) {
         $login_error = "لطفاً نام کاربری و رمز عبور را وارد کنید.";
     } else {
-        // بررسی نام کاربری
         $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ?");
         $stmt->execute([$username]);
-        $user = $stmt->fetch();
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($user && password_verify($password, $user['password_hash'])) {
-            // به‌روزرسانی last_login
             $stmt = $pdo->prepare("UPDATE users SET last_login = NOW() WHERE id = ?");
             $stmt->execute([$user['id']]);
 
-            // تنظیم متغیرهای session
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['user_role'] = $user['role'];
-            
-            // نمایش متغیرهای session و توقف برای بررسی
-            var_dump($_SESSION);
-            exit(); // توقف برای مشاهده خروجی
+
+            header("Location: panel.php");
+            exit();
         } else {
             $login_error = "نام کاربری یا رمز عبور اشتباه است.";
         }
@@ -58,10 +58,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 
 // پردازش فرم ثبت‌نام
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
-    $username = $_POST['username'] ?? '';
-    $email = $_POST['email'] ?? '';
-    $password = $_POST['password'] ?? '';
-    $repeat_password = $_POST['repeat_password'] ?? '';
+    $username = trim($_POST['username'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $password = trim($_POST['password'] ?? '');
+    $repeat_password = trim($_POST['repeat_password'] ?? '');
 
     $errors = [];
 
@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
     if (strlen($password) < 8) $errors[] = "رمز عبور باید حداقل 8 کاراکتر باشد.";
     if ($password !== $repeat_password) $errors[] = "تکرار رمز عبور مطابقت ندارد.";
 
-    // بررسی تکراری نبودن نام کاربری و ایمیل
+    // بررسی نام کاربری و ایمیل تکراری
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE username = ? OR email = ?");
     $stmt->execute([$username, $email]);
 
@@ -81,18 +81,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
     if (empty($errors)) {
         $hashed_password = password_hash($password, PASSWORD_DEFAULT);
         try {
-            // درج کاربر جدید
             $stmt = $pdo->prepare("INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)");
-            $role = 'نویسنده'; // می‌توانید نقش را بر اساس نیاز تنظیم کنید
+            $role = 'نویسنده';
+
             if ($stmt->execute([$username, $email, $hashed_password, $role])) {
-                // تنظیم متغیرهای session
                 $_SESSION['user_id'] = $pdo->lastInsertId();
                 $_SESSION['username'] = $username;
                 $_SESSION['user_role'] = $role;
 
-                // نمایش متغیرهای session و توقف برای بررسی
-                var_dump($_SESSION);
-                exit(); // توقف برای مشاهده خروجی
+                header("Location: panel.php");
+                exit();
             } else {
                 $register_errors[] = "خطا در ثبت‌نام. لطفاً دوباره تلاش کنید.";
             }
@@ -195,5 +193,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
 </body>
 </html>
 <?php
-ob_end_flush(); // ارسال و پاکسازی بافر خروجی
+
 ?>
